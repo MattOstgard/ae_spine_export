@@ -1,7 +1,7 @@
 {
 /*
 	Export After Effects to Spine JSON
-	Version 36
+	Version 38
 
 	Script for exporting After Effects animations as Spine JSON.
 	For use with Spine from Esoteric Software.
@@ -914,24 +914,24 @@
 
 	AE2JSON.prototype.makeSpineBoneName = function(layer) {
 		var layerName = layer.name.replace(/\.[a-z]+_/,'_');
-		if (layer.parent > 0) {
-			var baseNameRegex = /^([A-Za-z ]+)[0-9]+.*$/;
-			var baseName = layerName.replace(baseNameRegex,"$1");
-			var layers = this.jsonData.composition.layers;
-			var numLayers = layers.length;
-			for (var i=0; i<numLayers; i++) {
-				var otherLayer = layers[i];
-				if (otherLayer.index != layer.index && otherLayer.parent == layer.parent) {
-					var otherBaseName = otherLayer.name.replace(baseNameRegex,"$1");
-					if (otherBaseName == baseName) {
-						if ((otherLayer.inPoint <= layer.inPoint && otherLayer.outPoint <= layer.inPoint) ||
-							(otherLayer.inPoint >= layer.outPoint && otherLayer.outPoint >= layer.outPoint)) {
-							return baseName;
-						}
-					}
-				}
-			}
-		}
+		// if (layer.parent > 0) {
+		// 	var baseNameRegex = /^([A-Za-z ]+)[0-9]+.*$/;
+		// 	var baseName = layerName.replace(baseNameRegex,"$1");
+		// 	var layers = this.jsonData.composition.layers;
+		// 	var numLayers = layers.length;
+		// 	for (var i=0; i<numLayers; i++) {
+		// 		var otherLayer = layers[i];
+		// 		if (otherLayer.index != layer.index && otherLayer.parent == layer.parent) {
+		// 			var otherBaseName = otherLayer.name.replace(baseNameRegex,"$1");
+		// 			if (otherBaseName == baseName) {
+		// 				if ((otherLayer.inPoint <= layer.inPoint && otherLayer.outPoint <= layer.inPoint) ||
+		// 					(otherLayer.inPoint >= layer.outPoint && otherLayer.outPoint >= layer.outPoint)) {
+		// 					return baseName;
+		// 				}
+		// 			}
+		// 		}
+		// 	}
+		// }
 		layerName = layerName.replace(/([^\/]+)\/.*(_L[0-9]+)$/,"$1$2");
 		return layerName;
 	}
@@ -1042,10 +1042,10 @@
 				}
 				if ((layer.layerType == "AV" || layer.layerType == "Shape") && parentExists &&
 					!layerExists && boneNames[boneName] != true) {
-					var tx = layer.transform.position[0][1][0];
-					var ty = -layer.transform.position[0][1][1];
-					var sx = (layer.transform.scale[0][1][0] / 100.0);
-					var sy = (layer.transform.scale[0][1][1] / 100.0);
+					var tx = layer.transform.position_timeline[0][2][0];
+					var ty = -layer.transform.position_timeline[0][2][1];
+					var sx = (layer.transform.scale_timeline[0][2][0] / 100.0);
+					var sy = (layer.transform.scale_timeline[0][2][1] / 100.0);
 					var parentIndex = layer.parent;
 					var parentName = bonesData[0].name;	// root
 					var parentOffsetX;
@@ -1054,8 +1054,8 @@
 					if (parentIndex > 0) {
 						parent = layers[parentIndex-1];
 						parentName = this.makeSpineBoneName( parent );
-						parentOffsetX = -parent.transform.anchorPoint[0][1][0];
-						parentOffsetY = parent.transform.anchorPoint[0][1][1];
+						parentOffsetX = -parent.transform.anchorPoint_timeline[0][2][0];
+						parentOffsetY = parent.transform.anchorPoint_timeline[0][2][1];
 					} else {
 						parentOffsetX = -this.rootX;
 						parentOffsetY = this.rootY;
@@ -1069,12 +1069,12 @@
 					if (layer.comp) {
 						boneData["comp"] = layer.comp;
 						boneData["blendingMode"] = layer.blendingMode;
-						boneData["opacity"] = (layer.transform.opacity.length == 1) ? layer.transform.opacity[0][1] : 100.0;
+						boneData["opacity"] = (layer.transform.opacity.length == 1) ? layer.transform.opacity_timeline[0][2] : 100.0;
 						boneData["inPoint"] = layer.inPoint;
 						boneData["outPoint"] = layer.outPoint;
 						boneData["anchorPoint"] = [
-							layer.transform.anchorPoint[0][1][0],
-							layer.transform.anchorPoint[0][1][1]
+							layer.transform.anchorPoint_timeline[0][2][0],
+							layer.transform.anchorPoint_timeline[0][2][1]
 						]
 					}
 					if (Math.round(sx*10000) != 10000) {
@@ -1085,7 +1085,7 @@
 						if (sy < 0.001 && sy > -0.001) sy = sy < 0.0 ? -0.001 : 0.001;
 						boneData["scaleY"] = sy;
 					}
-					var rotation = (360-layer.transform.rotation[0][1])%360;
+					var rotation = (360-layer.transform.rotation_timeline[0][2])%360;
 					if (rotation != 0.0) {
 						boneData["rotation"] = rotation;
 					}
@@ -1256,13 +1256,13 @@
 				attachmentTimeline = slotAnimData[boneName]["attachment"];
 				if (!attachmentTimeline) {
 					slotAnimData[boneName]["attachment"] = attachmentTimeline = []
-					if (numKeys > 1) {
+					attachmentName = this.makeSpineAttachmentName( layer, layer.inPoint );
+					if (layer.outPoint >= compDuration) {
 						attachmentTimeline.push({
-							"time": 0,
+							"time": 0.0,
 							"name": null
 						});
 					}
-					attachmentName = this.makeSpineAttachmentName( layer, layer.inPoint );
 					attachmentTimeline.push({
 						"time": layer.inPoint,
 						"name": attachmentName
@@ -1327,6 +1327,13 @@
 				if (!slotAnimData[boneName]) slotAnimData[boneName] = {};
 				attachmentTimeline = slotAnimData[boneName]["attachment"];
 				if (!attachmentTimeline) slotAnimData[boneName]["attachment"] = attachmentTimeline = [];
+				if (attachmentTimeline.length == 0) {
+					attachmentName = this.makeSpineAttachmentName( layer, 0 );
+					attachmentTimeline.push({
+						"time": 0.0,
+						"name": attachmentName
+					});
+				}
 				attachmentTimeline.push({
 					"time": layer.outPoint,
 					"name": null
@@ -1358,8 +1365,8 @@
 						frame = layer.transform.position[j][0];
 						var keyData =  {
 							"time": frame * frameDuration,
-							"x": (layer.transform.position[j][1][0] - layer.transform.position[0][1][0]) * this.rootScale,
-							"y":-(layer.transform.position[j][1][1] - layer.transform.position[0][1][1]) * this.rootScale
+							"x": (layer.transform.position[j][1][0] - layer.transform.position_timeline[0][2][0]) * this.rootScale,
+							"y":-(layer.transform.position[j][1][1] - layer.transform.position_timeline[0][2][1]) * this.rootScale
 						};
 						var tangentType = layer.transform.position[j][2];
 						if (tangentType == "hold") {
@@ -1380,9 +1387,9 @@
 				if (layer.transform.scale.length > 1) {
 					var scaleTimeline = [];
 					numKeys = layer.transform.scale.length;
-					var sx = layer.transform.scale[0][1][0] / 100.0;
+					var sx = layer.transform.scale_timeline[0][2][0] / 100.0;
 					if (sx < 0.001 && sx > -0.001) sx = sx < 0.0 ? -0.001 : 0.001;
-					var sy = layer.transform.scale[0][1][1] / 100.0;
+					var sy = layer.transform.scale_timeline[0][2][1] / 100.0;
 					if (sy < 0.001 && sy > -0.001) sy = sy < 0.0 ? -0.001 : 0.001;
 					for (var j=0; j<numKeys; j++) {
 						frame = layer.transform.scale[j][0];
@@ -1404,11 +1411,12 @@
 					var rotateTimeline = [];
 					numKeys = layer.transform.rotation.length;
 					var lastValue = 0;
+//if (boneName=="RGHorseLegRear3_L3") alert(JSON.stringify(layer.transform.rotation,null,"\t"));
 					var lastTime = layer.transform.rotation[0][0] * frameDuration;
 					for (var j=0; j<numKeys; j++) {
 						var tangentType = layer.transform.rotation[j][2];
 						var time = layer.transform.rotation[j][0] * frameDuration;
-						var value = (layer.transform.rotation[0][1] - layer.transform.rotation[j][1]);
+						var value = (layer.transform.rotation_timeline[0][2] - layer.transform.rotation[j][1]);
 						var delta = value - lastValue;
 						var steps = Math.floor(Math.abs(delta) / 180) + 1;
 						var dt = (time - lastTime) / steps;
@@ -1416,10 +1424,16 @@
 						for (var k=1; k<=steps; k++) {
 							var keyData = {
 								"time": lastTime + (dt * k),
+
+								// DEBUG STUFF
 								// "rotation": layer.transform.rotation[j][1],
 								// "delta": delta*steps,
 								// "steps": steps,
 								// "k": k,
+								// "j": j,
+								// "value": value,
+								// "lastValue": lastValue,
+
 								"angle": (lastValue + (delta * k)) % 360
 							};
 							if (tangentType == "hold") {
@@ -1607,13 +1621,15 @@
 				} else {
 					for(keyIndex = 1; keyIndex <= prop.numKeys; keyIndex++) {
 						var keyTime = prop.keyTime(keyIndex);
-						// Always add a keyframe at frame zero
-						// if (keyIndex == 1 && keyTime > 0.0) {
-						// 	var frame = 0;
-						// 	var propVal = prop.valueAtTime(0.0, false);
-						// 	var keyData = [frame, propVal,"hold"];
-						// 	timeValues.push(keyData);
-						// }
+						if (keyTime < 0) {
+							var frame = 0;
+							var propVal = prop.valueAtTime(0.0, false);
+							var keyData = [frame, propVal,"linear"];
+							if (timeValues.length == 0) {
+								timeValues.push(keyData);
+							}
+							continue;
+						}
 						var frame = keyTime / frameDuration;
 						var propVal = prop.valueAtTime(keyTime, false);
 						var interpolation = prop.keyOutInterpolationType(keyIndex);
