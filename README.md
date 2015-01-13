@@ -2,12 +2,6 @@ Spine Export Scripts
 ====================
 
 Scripts to export Adobe Photoshop and After Effects content to Esoteric Software's Spine animation tool JSON format.
-Migrate Spine data
--------------------------
-Starting with Spine version 2.0, the way that scale timeline values are computed changed.  This python script updates any spine json file below version 2.0.0 and regenerates the scale timelines.  Currently, it does not preserve the pretty formatting that Spine outputs.  The script is designed to accomodate additional migrations in the future.  The script can be run multiple times without ill effect.
-
-***Note on Zero-Scale bones***: Bones with a zero for scale will use 0.001 as their scale, and the scale timeline will be adjusted accordingly.  If the bone itself has zero for scale, nothing on the timeline can affect it.
-
 
 After Effects Export with ae_to_spine.jsx
 -------------------------
@@ -16,14 +10,17 @@ The ae_to_spine.jsx script exports a lot of animation data from After Effects, b
 * Image layers
 * PNG sequence layers
 * Layer hierarchy (parenting)
-* Translation, rotation, scale, opacity keyframes (as linear)
+* Translation (position), rotation, scale, opacity keyframes (as linear)
 * Composition layers (nested compositions)
 * Per-layer in-point and out-point (visibility)
 * Time remapping
 * Additive blend mode
+* Export multiple compositions as a single skeleton with multiple animations
 
 Things that are not supported:
 
+* Animating anchor points
+* 3D transoformations
 * Warp effects, puppet animation, etc. (no deformation)
 * Glows, shadows, etc. (no effects)
 * Masks of any kind
@@ -58,6 +55,14 @@ Some notable things that aren't supported:
 * Eliminating duplicate images
 
 Regarding duplicate or mirrored images, the workflow we've adopted is to use duplcated and/or mirrored objects all we want in Photoshop, but once we export for Spine, edit the JSON and replace all duplicate image references with a single image reference.  Various texture packer or atlas generators can do this job as well.  The point is, look for opportunities to re-use the same texture in Spine if possible.
+
+Migrate Spine data
+-------------------------
+spine_migration.py
+
+Starting with Spine version 2.0, the way that scale timeline values are computed changed.  This python script updates any spine json file below version 2.0.0 and regenerates the scale timelines.  Currently, it does not preserve the pretty formatting that Spine outputs.  The script is designed to accomodate additional migrations in the future.  The script can be run multiple times without ill effect.
+
+***Note on Zero-Scale bones***: Bones with a zero for scale will use 0.001 as their scale, and the scale timeline will be adjusted accordingly.  If the bone itself has zero for scale, nothing on the timeline can affect it.
 
 Support
 -------
