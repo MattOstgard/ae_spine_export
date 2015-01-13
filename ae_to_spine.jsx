@@ -1,7 +1,7 @@
 {
 /*
 	Export After Effects to Spine JSON
-	Version 38
+	Version 44
 
 	Script for exporting After Effects animations as Spine JSON.
 	For use with Spine from Esoteric Software.
@@ -58,21 +58,184 @@
 		return result;
 	}
 
-	function AE2JSON(thisObj,saveToFile) {
-		if (this.showInitialDialog()) {
-			this.initializeCompositions();
-
-			this.progressWindow = new Window("palette","Export Spine",undefined,{"closeButton":false});
-			this.progressBar = this.progressWindow.add("progressbar",undefined,0,this.numLayers);
-			this.progressWindow.show();
-
-			this.processCompositions();
-
-			this.renderJSON(saveToFile);
-
-			this.progressWindow.close();
-			this.showCompleteDialog();
+	if (typeof Array.prototype.indexOf != "function") {
+		Array.prototype.indexOf = function (el) {
+			var len = this.length;
+			for(var i = 0; i < len; i++) if(el === this[i]) return i;
+			return -1;
 		}
+	}
+
+	function AE2JSON(thisObj,saveToFile) {
+		var numSelected = app.project.selection.length;
+		this.numCompsSelected = 0;
+		for (var i=0; i<numSelected; i++) {
+			var rootItem = app.project.selection[i];
+			if (rootItem instanceof CompItem) {
+				this.numCompsSelected++;
+			}
+		}
+		if (this.numCompsSelected > 0) {
+			this.animationName = "animation";
+			if (this.showInitialDialog()) {
+				var orgTimeDisplayType = app.project.timeDisplayType;
+				app.project.timeDisplayType = TimeDisplayType.FRAMES;
+				this.spineData = [];
+				for (var i=0; i<numSelected; i++) {
+					var rootItem = app.project.selection[i];
+					if (rootItem instanceof CompItem) {
+						var compName = rootItem.name;
+						if (numSelected > 1) {
+							this.animationName = compName;
+						}
+						this.resetCompositions();
+						this.initializeCompositions(rootItem);
+						this.progressWindow = new Window("palette","Export Spine",undefined,{"closeButton":false});
+						this.progressBar = this.progressWindow.add("progressbar",undefined,0,this.numLayers);
+						this.progressWindow.show();
+						var spineData = this.processCompositions();
+						this.spineData.push( spineData );
+					}
+				}
+
+				this.jsonData = this.combineSpineData( this.spineData );
+
+				app.project.timeDisplayType = orgTimeDisplayType;
+
+				this.renderJSON(saveToFile);
+
+				this.progressWindow.close();
+				this.showCompleteDialog();
+			}
+		} else {
+			alert( "No Compositions Selected.\nPlease select at least one Composition in the project.");
+		}
+	}
+
+	AE2JSON.prototype.combineSpineData = function(spineData){
+		var numSpines = spineData.length;
+		if (numSpines > 1) {
+			var firstAnimName = this.getAnimationName(spineData[0]);
+			this.addAnimationNameToSkin(spineData[0]["skins"]["default"],firstAnimName);
+			for (var i=1; i<numSpines; i++) {
+				var boneData = spineData[i]["bones"];
+				spineData[0]["bones"] = this.mergeByName( spineData[0]["bones"], spineData[i]["bones"] );
+				spineData[0]["slots"] = this.mergeByName( spineData[0]["slots"], spineData[i]["slots"] );
+				var animName = this.getAnimationName(spineData[i]);
+				this.addAnimationNameToSkin( spineData[i]["skins"]["default"], animName );
+				this.mergeSkins( spineData[0]["skins"]["default"], firstAnimName,
+					spineData[i]["skins"]["default"], animName);
+				spineData[0]["animations"][animName] = spineData[i]["animations"][animName];
+			}
+			var animations = spineData[0]["animations"];
+			var skins = spineData[0]["skins"]["default"];
+			for (var slotName in skins) {
+				for (var texName in skins[slotName]) {
+					var animNames = skins[slotName][texName]["_anim"];
+					for (var animName in animations) {
+						var slotsAnim = animations[animName]["slots"];
+						if (!slotsAnim.hasOwnProperty(slotName)) {
+							slotsAnim[slotName] = {};
+						}
+						if (!slotsAnim[slotName].hasOwnProperty("attachment")) {
+							slotsAnim[slotName]["attachment"] = [];
+						}
+						var slotData = this.findByName(spineData[0]["slots"],slotName);
+						var slotTexName = slotData.hasOwnProperty("attachment") ? slotData["attachment"] : null;
+						if (animNames.indexOf(animName) == -1) {
+							if (slotsAnim[slotName]["attachment"].length==0 || slotsAnim[slotName]["attachment"][0]["name"]!=null) {
+								slotsAnim[slotName]["attachment"].unshift( { "time": 0, "name": null } );
+							}
+						} else {
+							if (slotsAnim[slotName]["attachment"].length==0 || slotsAnim[slotName]["attachment"][0]["name"]!=slotTexName) {
+								slotsAnim[slotName]["attachment"] = [ { "time": 0, "name": texName } ];
+							} else if (slotsAnim[slotName]["attachment"].length>0 && slotsAnim[slotName]["attachment"][0]["name"]!=null && slotsAnim[slotName]["attachment"][0]["time"]>0) {
+								slotsAnim[slotName]["attachment"].unshift( { "time": 0, "name": null } );
+							}
+						}
+					}
+				}
+			}
+			this.removeAnimationNamesFromSkin(skins);
+		}
+		return spineData[0];
+	}
+
+	AE2JSON.prototype.getAnimationName = function(spineData){
+		var name;
+		for (name in spineData["animations"]) {
+			break;
+		}
+		return name;
+	}
+
+	AE2JSON.prototype.removeAnimationNamesFromSkin = function(skin){
+		for (var name in skin) {
+			for (var tex in skin[name]) {
+				delete skin[name][tex]["_anim"];
+			}
+		}
+	}
+
+	AE2JSON.prototype.addAnimationNameToSkin = function(skin,animName){
+		for (var name in skin) {
+			for (var tex in skin[name]) {
+				if (skin[name][tex].hasOwnProperty("_anim") == false) {
+					skin[name][tex]["_anim"] = [animName]
+				} else if (skin[name][tex]["_anim"].indexOf(animName) == -1) {
+					skin[name][tex]["_anim"].push(animName);
+				}
+			}
+		}
+	}
+
+	AE2JSON.prototype.mergeSkins = function(skin1,animName1,skin2,animName2){
+		for (var name in skin2) {
+			if (skin1.hasOwnProperty(name) == false) {
+				skin1[name] = skin2[name];
+			} else {
+				for (var tex in skin2[name]) {
+					if (skin1[name].hasOwnProperty(tex) == false) {
+						skin1[name][tex] = skin2[name][tex];
+					} else {
+						skin1[name][tex]["_anim"] = skin1[name][tex]["_anim"].concat(skin2[name][tex]["_anim"]);
+					}
+				}
+			}
+		}
+		return skin1;
+	}
+
+	AE2JSON.prototype.mergeByName = function(array1,array2){
+		var i=0;
+		var j=0;
+		var result=[];
+		var l1=array1.length;
+		var l2=array2.length;
+		while (i<l1 || j<l2) {
+			if (i<l1) {
+				if (this.findByName(result,array1[i]["name"])==null) {
+					result.push( array1[i] );
+				}
+				i++;
+			}
+			if (j<l2) {
+				if (this.findByName(result,array2[j]["name"])==null) {
+					result.push( array2[j] );
+				}
+				j++;
+			}
+		}
+		return result;
+	}
+
+	AE2JSON.prototype.findByName = function(array,name){
+		for (var i=0;i<array.length;i++) {
+			if (array[i]["name"] == name) {
+				return array[i];
+			}
+		}
+		return null;
 	}
 
 	AE2JSON.prototype.showInitialDialog = function(){
@@ -120,19 +283,22 @@
 		this.totalKeyframes = this.countKeyframes( this.jsonData["animations"] );
 	}
 
-	AE2JSON.prototype.initializeCompositions = function(){
+	AE2JSON.prototype.resetCompositions = function(){
 		this.proj = app.project;
-		this.orgTimeDisplayType = this.proj.timeDisplayType;
-		this.proj.timeDisplayType = TimeDisplayType.FRAMES;
-
+		var projName = app.project.file.name;
+		this.projName = projName.substring(projName.lastIndexOf('/')+1).split('.')[0];
 		this.numLayers = 0;
 		this.totalBones = 0;
 		this.totalKeyframes = 0;
-		this.masterComp = app.project.activeItem;
-		this.referencedComps = [this.masterComp];
-		this.activeComp = app.project.activeItem.name;
+		this.referencedComps = [];
 		this.compData = {};
-		var i=0;
+	}
+
+	AE2JSON.prototype.initializeCompositions = function(rootItem){
+		this.masterComp = rootItem;
+		this.activeComp = rootItem.name;
+		var i = this.referencedComps.length;
+		this.referencedComps.push(rootItem);
 		while (i < this.referencedComps.length) {
 			var comp = this.referencedComps[i];
 			if (!this.compData[comp.name]) {
@@ -148,8 +314,6 @@
 			this.numLayers += this.compData[comp.name].composition.layers.length;
 			i++;
 		}
-
-		this.proj.timeDisplayType = this.orgTimeDisplayType;
 	}
 
 	AE2JSON.prototype.processCompositions = function(){
@@ -161,6 +325,7 @@
 		this.jsonData = this.compData[this.activeComp];
 		this.combineCompositions();
 		this.processFlips();
+		return this.jsonData;
 	}
 
 	AE2JSON.prototype.processFlips = function(boneName){
@@ -235,7 +400,7 @@
 	}
 
 	AE2JSON.prototype.getBoneAnimation = function(boneName){
-		var animation = this.jsonData["animations"]["animation"]["bones"];
+		var animation = this.jsonData["animations"][this.animationName]["bones"];
 		if (animation.hasOwnProperty(boneName)) {
 			return animation[boneName];
 		} else {
@@ -269,7 +434,7 @@
 
 	AE2JSON.prototype.combineCompositions = function(){
 		var masterDuration = this.masterComp.duration;
-		var animation = this.jsonData["animations"]["animation"];
+		var animation = this.jsonData["animations"][this.animationName];
 		var i=0;
 		while (i < this.jsonData.bones.length) {
 			this.progress();
@@ -397,11 +562,11 @@
 			}
 			this.jsonData.slots.splice(slotStartingIndex+i,0,newSlotData);
 			if (compInPoint > 0) {
-				var animData = compData["animations"]["animation"]["slots"][name];
+				var animData = compData["animations"][this.animationName]["slots"][name];
 				var attachmentTimeline;
 				if (!animData) {
 					attachmentTimeline = []
-					animData = compData["animations"]["animation"]["slots"][name] = {
+					animData = compData["animations"][this.animationName]["slots"][name] = {
 						"attachment": attachmentTimeline
 					};
 				} else {
@@ -442,8 +607,8 @@
 		// Copy slot animations
 		//
 		var colorAnimation = compAnimation["slots"][parentBoneName] && compAnimation["slots"][parentBoneName].hasOwnProperty("color") ? compAnimation["slots"][parentBoneName]["color"] : null;
-		var fromAnimData = compData["animations"]["animation"]["slots"];
-		var toAnimData = this.jsonData["animations"]["animation"]["slots"];
+		var fromAnimData = compData["animations"][this.animationName]["slots"];
+		var toAnimData = this.jsonData["animations"][this.animationName]["slots"];
 		for (var name in fromAnimData) {
 			var animEntry = fromAnimData[name];
 			toAnimData[parentBoneName+"_"+name] = animEntry;
@@ -510,7 +675,7 @@
 // alert("K "+compEntry["time"]+"\n"+j+"<"+numColors+"\n"+k+"<"+compColors);
 							var prev = compEntry;
 							var next = colorAnimation[k+1<compColors?k+1:compColors-1];
-							opacity = this.interpolate( prev["opacity"], next["opacity"], prev["time"], next["time"], colorEntry["time"] );
+							opacity = interpolate( prev["opacity"], next["opacity"], prev["time"], next["time"], colorEntry["time"] );
 							opacity = (compEntry["opacity"]/100.0) * opacity;
 							newColorEntry["time"] = colorEntry["time"];
 // newColorEntry["debug"] = "j ahead";
@@ -520,7 +685,7 @@
 // alert("J "+colorEntry["time"]+"\n"+j+"<"+numColors+"\n"+k+"<"+compColors);
 							var prev = colorEntry;
 							var next = animEntry["color"][j+1<numColors?j+1:numColors-1];
-							opacity = this.interpolate( prev["opacity"], next["opacity"], prev["time"], next["time"], colorEntry["time"] );
+							opacity = interpolate( prev["opacity"], next["opacity"], prev["time"], next["time"], colorEntry["time"] );
 							opacity = (compEntry["opacity"]/100.0) * opacity;
 							newColorEntry["time"] = colorEntry["time"];
 // newColorEntry["debug"] = "k ahead";
@@ -571,7 +736,8 @@
 		//
 		// Copy bone animation data
 		//
-		this.addInPointAll( compData["animations"]["animation"]["bones"], this.jsonData["animations"]["animation"]["bones"], parentBoneName, compInPoint, masterDuration );
+		this.addInPointAll( compData["animations"][this.animationName]["bones"],
+			this.jsonData["animations"][this.animationName]["bones"], parentBoneName, compInPoint, masterDuration );
 	}
 
 	AE2JSON.prototype.findEntryBeforeTime = function( animData, time ) {
@@ -800,7 +966,7 @@
 	 * @param newT New mid-point keyframe time.
 	 * @return Interpolated color.
 	 */
-	AE2JSON.prototype.argbInterpolate = function( A, B, t1, t2, newT ) {
+	function argbInterpolate( A, B, t1, t2, newT ) {
 		var L = t2 - t1;
 		if (L==0) return A;
 		var l = (newT >= t1) ? ((newT <= t2) ? (newT - t1) : L) : 0;
@@ -833,7 +999,7 @@
 	 * @param newT New mid-point keyframe time.
 	 * @return Interpolated coordinates.
 	 */
-	AE2JSON.prototype.xyInterpolate = function( A, B, t1, t2, newT ) {
+	function xyInterpolate( A, B, t1, t2, newT ) {
 		var L = t2 - t1;
 		if (L==0) return A;
 		var l = (newT >= t1) ? ((newT <= t2) ? (newT - t1) : L) : 0;
@@ -854,7 +1020,7 @@
 	 * @param newT New mid-point keyframe time.
 	 * @return Interpolated value
 	 */
-	AE2JSON.prototype.interpolate = function( A, B, t1, t2, newT ) {
+	function interpolate( A, B, t1, t2, newT ) {
 		var L = t2 - t1;
 		if (L==0) return A;
 		var l = (newT >= t1) ? ((newT <= t2) ? (newT - t1) : L) : 0;
@@ -881,31 +1047,38 @@
 
 	AE2JSON.prototype.doCompLayers = function(myComp) {
 		var myComp, myLayer, numLayers, layerType;
-		
 		if(myComp instanceof CompItem) {
 			numLayers = myComp.layers.length;
-			
+			var usedNames = {};
 			for(i=0; i<numLayers; i++) {
 				myLayer = myComp.layers[i+1];
 				if(!myLayer.adjustmentLayer == true){
-
 					layerType = this.checkLayerType(myLayer);
+					var layerData = null;
 					switch(layerType){
 						case "NULL":
-							this.jsonData.composition.layers.push(new Null(this.jsonData.composition.compSettings, myLayer, this.spatialTolerance));
+						 	layerData = new Null(this.jsonData.composition.compSettings, myLayer, this.spatialTolerance);
 							break;
 						case "AV":
-							this.jsonData.composition.layers.push(new AV(this.jsonData.composition.compSettings, myLayer, this.spatialTolerance));
+							layerData = new AV(this.jsonData.composition.compSettings, myLayer, this.spatialTolerance);
 							if (myLayer.source instanceof CompItem) {
 								this.referencedComps.push(myLayer.source)
 							}
 							break;
 						case "SHAPE":
-							this.jsonData.composition.layers.push(new ShapeObj(this.jsonData.composition.compSettings, myLayer, this.spatialTolerance));
+							layerData = new ShapeObj(this.jsonData.composition.compSettings, myLayer, this.spatialTolerance);
 							break;
 						default:
-							this.jsonData.composition.layers.push("unknown "+getObjectClass(myLayer));
+							//this.jsonData.composition.layers.push("unknown "+getObjectClass(myLayer));
 							break;
+					}
+					if (layerData != null) {
+						if (usedNames.hasOwnProperty(layerData.name) == false) {
+							usedNames[layerData.name] = 1;
+						} else {
+							layerData.name += "_L"+(usedNames[layerData.name]++);
+						}
+						this.jsonData.composition.layers.push( layerData );
 					}
 				}
 			}
@@ -938,8 +1111,6 @@
 
 	AE2JSON.prototype.makeSpineSlotName = function(layer) {
 		return this.makeSpineBoneName(layer);
-		// var layerName = layer.name;
-		// return layerName.replace(/([^\/]+)\/.*(_L[0-9]+)$/,"$1$2");
 	}
 
 
@@ -952,8 +1123,11 @@
 				.replace(/_L[0-9]+$/,'')
 				.replace(/ /g,'_')
 				.replace(/\.[A-Za-z\.]+$/,'');
-			// return sourceName.replace(/([^\/]+)\/([^\.]+).*/,"$2-assets/$1").replace(/_L[0-9]+$/,'').replace(/ /g,'_');
-			return this.activeComp+"-assets/"+attachmentName;
+			if (this.numCompsSelected > 1) {
+				return this.projName+"-assets/"+attachmentName;
+			} else {
+				return this.activeComp+"-assets/"+attachmentName;
+			}
 		}
 	}
 
@@ -1042,6 +1216,9 @@
 				}
 				if ((layer.layerType == "AV" || layer.layerType == "Shape") && parentExists &&
 					!layerExists && boneNames[boneName] != true) {
+					if (!layer.transform.position_timeline) {
+						alert(boneName);
+					}
 					var tx = layer.transform.position_timeline[0][2][0];
 					var ty = -layer.transform.position_timeline[0][2][1];
 					var sx = (layer.transform.scale_timeline[0][2][0] / 100.0);
@@ -1411,7 +1588,6 @@
 					var rotateTimeline = [];
 					numKeys = layer.transform.rotation.length;
 					var lastValue = 0;
-//if (boneName=="RGHorseLegRear3_L3") alert(JSON.stringify(layer.transform.rotation,null,"\t"));
 					var lastTime = layer.transform.rotation[0][0] * frameDuration;
 					for (var j=0; j<numKeys; j++) {
 						var tangentType = layer.transform.rotation[j][2];
@@ -1467,20 +1643,19 @@
 			"bones": bonesData,
 			"slots": slotsData,
 			"skins": skinsData,
-			"animations": {
-				"animation": {
-					"bones": boneAnimData,
-					"slots": slotAnimData
-				}
-			}
+			"animations": {}
 		};
+		spineData["animations"][this.animationName] = {
+			"bones": boneAnimData,
+			"slots": slotAnimData
+		}
 		return spineData;
 	}
 
 
 	AE2JSON.prototype.renderJSON = function(toFile) {
 		// create JSON file.
-		var compName    = app.project.activeItem.name;
+		var compName    = app.project.activeItem ? app.project.activeItem.name : app.project.file.name.replace(/\..*/,"");
 		var fileName    = compName + this.filenameSuffix + ".json";
 		fileName    = fileName.replace(/\s/g, '');
 
@@ -1532,7 +1707,6 @@
 	}
 
 	BaseObject.prototype.setDefaults = function(compSettings, layer){
-		// add _L + the layer index to make sure names are unique
 		this.objData.name  = this.createName(layer.name, layer.index);
 		this.objData.index = layer.index;
 		this.objData.inPoint = layer.inPoint;
@@ -1549,7 +1723,9 @@
 	}
 
 	BaseObject.prototype.createName = function(name, index){
-		return name + "_L" + index;
+		// Remove filename extensions in name
+		name = name.replace( /\.[^\/\\]+/, "" );		// + "_L" + index;
+		return name;
 	}
 
 	BaseObject.prototype.setPropGroups = function(){
@@ -1577,28 +1753,79 @@
 			group     = this.objData[groupName] = {};
 			propGroup = layer[groupName];
 
+
 			if (propGroup.numProperties != undefined ) {
 				for (j = 1; j < propGroup.numProperties; j++){
+					prop = propGroup.property(j);
 					visible = true;
 					try{
-						propGroup.property(j).selected = true;
+						prop.selected = true;
 					}catch (err){
 						visible = false;
 					}
 					if (visible) {
-						prop = propGroup.property(j);
 						propName = prop.name;
 						propName = propName.toCamelCase();
 						group[propName] = this.setPropValues(prop,true,layer.name,propName);
 						group[propName+"_timeline"] = this.setPropValues(prop,false,layer.name,propName);
 					}
 				}
+				this.combineXY( "position", group );
+				this.combineXY( "rotation", group );
 			} else {
 				this.objData[groupName] = this.setPropValues(propGroup,true,layer.name,propName);
 				this.objData[groupName+"_timeline"] = this.setPropValues(prop,false,layer.name,propName);
 			}
 		}
-		//if(hasParent){layer.parent = parentLayer};
+	}
+
+	BaseObject.prototype.combineXY = function( propName, group ){
+		if (!group.hasOwnProperty(propName)) {
+		var xPropName = "x"+propName.charAt(0).toUpperCase() + propName.slice(1);
+			if (group.hasOwnProperty(xPropName)) {
+				var xPropName = "y"+propName.charAt(0).toUpperCase() + propName.slice(1);
+				var xp = group[xPropName];
+				var yp = group[yPropName];
+				var numX = xp.length;
+				var numY = yp.length;
+				var pos=[];
+				for (var i=0, j=0; i<numX || j<numY; ) {
+					var x,y,t;
+					var xd = i<numX ? xp[i] : xp[i-1];	// assume there's always at least one?
+					var yd = j<numY ? yp[j] : yp[j-1];
+					if (xd[0] < yd[0]) {
+						t = xd[0];
+						x = xd[1];
+						y = (j>=numY-1) ? yp[numY-1][1] : interpolate(yp[j][1],yp[j+1][1],yp[j][0],yp[j+1][0],t);
+						if (i<numX) i++; else if (j<numY) j++;
+					} else if (xd[0] > yd[0]) {
+						t = yd[0];
+						y = yd[1];
+						x = (i>=numX-1) ? xp[numX-1][1] : interpolate(xp[i][1],xp[i+1][1],xp[i][0],xp[i+1][0],t);
+						if (j<numY) j++; else if (i<numX) i++;
+					} else {
+						t = xd[0];
+						x = xd[1];
+						y = yd[1];
+						if (i<numX) i++;
+						if (j<numY) j++;
+					}
+					pos.push([t,[x,y,0],"linear"]);
+				}
+				group[propName] = pos;
+				xp = group[xPropName+"_timeline"];
+				yp = group[yPropName+"_timeline"];
+				pos = [];
+				for (var i=0; i<xp.length; i++) {
+					pos.push( [
+						xp[i][0],
+						i,
+						[ xp[i][2], yp[i][2], 0 ]
+					]);
+				}
+				group[propName+"_timeline"] = pos;
+			}
+		}
 	}
 
 	BaseObject.prototype.setPropValues = function(prop,asKeyframes,layerName,propName){
@@ -1635,7 +1862,7 @@
 						var interpolation = prop.keyOutInterpolationType(keyIndex);
 						var keyData = [frame, propVal];
 						if (interpolation == KeyframeInterpolationType.HOLD) {
-							keyData.push("hold");
+							keyData.push((keyIndex < prop.numKeys-1) ? "hold" : "linear");
 							timeValues.push(keyData);
 						} else {
 							if (prop.isSpatial) {
