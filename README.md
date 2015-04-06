@@ -14,7 +14,7 @@ The ae_to_spine.jsx script exports a lot of animation data from After Effects, b
 * Composition layers (nested compositions)
 * Per-layer in-point and out-point (visibility)
 * Time remapping
-* Additive blend mode
+* Blend modes: normal, additive, multiply, screen
 * Export multiple compositions as a single skeleton with multiple animations
 
 Things that are not supported:
