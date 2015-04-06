@@ -1,12 +1,12 @@
 {
 /*
 	Export After Effects to Spine JSON
-	Version 44
+	Version 45
 
 	Script for exporting After Effects animations as Spine JSON.
 	For use with Spine from Esoteric Software.
 
-	Copyright (c) 2014 Nimai Malle <nimai@beecavegames.com>
+	Copyright (c) 2015 Nimai Malle <nimai@beecavegames.com>
 
 	Portions Copyright (c) 2012 Cole Reed <info@auralgrey.com>
 	Derived from AE2JSON v0.5 https://github.com/ichabodcole/AE2JSON.git
@@ -432,6 +432,32 @@
 		return bones;
 	}
 
+	AE2JSON.prototype.getSpineBlendMode = function(blendingMode){
+		var result = "normal";
+		switch (blendingMode) {
+			case BlendingMode.DARKEN:
+			case BlendingMode.MULTIPLY:
+			case BlendingMode.COLOR_BURN:
+			case BlendingMode.CLASSIC_COLOR_BURN:
+			case BlendingMode.LINEAR_BURN:
+			case BlendingMode.DARKER_COLOR:
+				result = "multiply";
+				break;
+			case BlendingMode.ADD:
+			case BlendingMode.LIGHTEN:
+			case BlendingMode.COLOR_DODGE:
+			case BlendingMode.CLASSIC_COLOR_DODGE:
+			case BlendingMode.LINEAR_DODGE:
+			case BlendingMode.LIGHTER_COLOR:
+				result = "additive";
+				break;
+			case BlendingMode.SCREEN:
+				result = "screen";
+				break;
+		}
+		return result;
+	}
+
 	AE2JSON.prototype.combineCompositions = function(){
 		var masterDuration = this.masterComp.duration;
 		var animation = this.jsonData["animations"][this.animationName];
@@ -543,11 +569,12 @@
 				"bone": parentBoneName+"_"+slotData["bone"],
 				"attachment": attachment
 			};
-			if (slotData["additive"]) {
-				newSlotData["additive"] = slotData["additive"];
+			if (slotData["blend"]) {
+				newSlotData["blend"] = slotData["blend"];
 			}
-			if (compBlendingMode != BlendingMode.NORMAL) {
-				newSlotData["additive"] = true;
+			var blend = this.getSpineBlendMode(compBlendingMode);
+			if (blend != "normal") {
+				newSlotData["blend"] = blend;
 			}
 			if (slotData["color"]) {
 				newSlotData["color"] = slotData["color"];
@@ -1347,8 +1374,9 @@
 					if (layer.inPoint <= 0.0) {
 						slotData["attachment"] = attachmentName;
 					}
-					if (layer.blendingMode != BlendingMode.NORMAL) {
-						slotData["additive"] = true;
+					var blend = this.getSpineBlendMode(layer.blendingMode);
+					if (blend != "normal") {
+						slotData["blend"] = blend;
 					}
 					var opacity = layer.transform.opacity[0][1];
 					if (opacity < 100.0) {
