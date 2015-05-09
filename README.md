@@ -3,6 +3,12 @@ Spine Export Scripts
 
 Scripts to export Adobe Photoshop and After Effects content to Esoteric Software's Spine animation tool JSON format.
 
+**Installation**
+
+Copt the .jsx file(s) and the **lib** directory to the Scripts directory for After Effects or Photoshop.  On Mac, After Effects, this is generally under "/Applications/Adobe After Effects CC 2014/Scripts/".
+
+
+
 After Effects Export with ae_to_spine.jsx
 -------------------------
 The ae_to_spine.jsx script exports a lot of animation data from After Effects, but not everything.  Things that are supported:
