@@ -5,7 +5,7 @@ Scripts to export Adobe Photoshop and After Effects content to Esoteric Software
 
 **Installation**
 
-Copt the .jsx file(s) and the **lib** directory to the Scripts directory for After Effects or Photoshop.  On Mac, After Effects, this is generally under "/Applications/Adobe After Effects CC 2014/Scripts/".
+Copy the .jsx file(s) and the **lib** directory to the Scripts directory for After Effects or Photoshop.  On Mac, After Effects, this is generally under "/Applications/Adobe After Effects CC 2014/Scripts/".
 
 
 
