@@ -7,7 +7,7 @@ Scripts to export Adobe Photoshop and After Effects content to Esoteric Software
 
 Copy the .jsx file(s) and the **lib** directory to the Scripts directory for After Effects or Photoshop.  On Mac, After Effects, this is generally under "/Applications/Adobe After Effects CC 2014/Scripts/".
 
-
+Additional installation instructions and getting started tutorial [here](http://bee-cave-games.github.io/blog/2016/02/14/after-effects-to-spine-tutorial).
 
 After Effects Export with ae_to_spine.jsx
 -------------------------
