@@ -1,7 +1,7 @@
 {
 /*
 	Export After Effects to Spine JSON
-	Version 45
+	Version 46
 
 	Script for exporting After Effects animations as Spine JSON.
 	For use with Spine from Esoteric Software.
