@@ -1811,7 +1811,7 @@
 		if (!group.hasOwnProperty(propName)) {
 		var xPropName = "x"+propName.charAt(0).toUpperCase() + propName.slice(1);
 			if (group.hasOwnProperty(xPropName)) {
-				var xPropName = "y"+propName.charAt(0).toUpperCase() + propName.slice(1);
+				var yPropName = "y"+propName.charAt(0).toUpperCase() + propName.slice(1);
 				var xp = group[xPropName];
 				var yp = group[yPropName];
 				var numX = xp.length;
