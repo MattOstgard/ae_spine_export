@@ -1,4 +1,4 @@
-{
+﻿{
 /*
 	Export After Effects to Spine JSON
 	Version 46
@@ -1151,9 +1151,9 @@
 				.replace(/ /g,'_')
 				.replace(/\.[A-Za-z\.]+$/,'');
 			if (this.numCompsSelected > 1) {
-				return this.projName+"-assets/"+attachmentName;
+				return this.projName+"-assets/"+attachmentName; // MATT NOTE: this should be editable
 			} else {
-				return this.activeComp+"-assets/"+attachmentName;
+				return this.activeComp+"-assets/"+attachmentName; // MATT NOTE: and this
 			}
 		}
 	}
@@ -1438,7 +1438,7 @@
 					frame = layer.transform.opacity[j][0];
 					var opacity = layer.transform.opacity[j][1];
 					var keyData = {
-						"time": frame * frameDuration,
+						"time": frame * frameDuration, // MATT NOTE: maybe rounding error?
 						"color": this.opacityToHex( opacity ),
 						"opacity": opacity   // Must delete before output
 					};
@@ -1453,27 +1453,11 @@
 			}
 			var attachmentTimeline = null;
 			var attachmentName = this.makeSpineAttachmentName( layer, 0 );
+			var lastFramesAttachmentName = null;
 
 			numKeys = layer.timeRemap ? layer.timeRemap.length : 0;
 
-			if (layer.inPoint > 0.0) {
-				if (!slotAnimData[boneName]) slotAnimData[boneName] = {};
-				attachmentTimeline = slotAnimData[boneName]["attachment"];
-				if (!attachmentTimeline) {
-					slotAnimData[boneName]["attachment"] = attachmentTimeline = []
-					attachmentName = this.makeSpineAttachmentName( layer, layer.inPoint );
-					if (layer.outPoint >= compDuration) {
-						attachmentTimeline.push({
-							"time": 0.0,
-							"name": null
-						});
-					}
-					attachmentTimeline.push({
-						"time": layer.inPoint,
-						"name": attachmentName
-					});
-				}
-			}
+
 
 			if (layer.files) {
 				if (!slotAnimData[boneName]) slotAnimData[boneName] = {};
@@ -1497,14 +1481,14 @@
 							} else if (frame < 0) {
 								frame = 0;
 							}
-							var time = fromTime + (dt * j);
+							var time = fromTime + (dt * j); // MATT NOTE: rounding error
 							var thisFramesAttachmentName = this.makeSpineAttachmentNameStr( layer.files[frame] );
-							if (thisFramesAttachmentName != attachmentName) {
+							if (thisFramesAttachmentName != lastFramesAttachmentName) {
 								attachmentTimeline.push({
 									"time": time,
 									"name": thisFramesAttachmentName
 								});
-								attachmentName = thisFramesAttachmentName;
+								lastFramesAttachmentName = thisFramesAttachmentName;
 							}
 						}
 					}
@@ -1515,15 +1499,36 @@
 					var numFrames = layer.files.length;
 					var dt = duration / (numFrames+1);
 					for (var frame=0; frame<numFrames; frame++) {
-						var time = fromTime + (dt * frame);
+						var time = fromTime + (dt * frame); // MATT NOTE: rounding error
 						var thisFramesAttachmentName = this.makeSpineAttachmentNameStr( layer.files[frame] );
-						if (thisFramesAttachmentName != attachmentName) {
+						var thisFramesAttachmentName = this.makeSpineAttachmentNameStr( layer.files[frame] );
+						if (thisFramesAttachmentName != lastFramesAttachmentName) {
 							attachmentTimeline.push({
 								"time": time,
 								"name": thisFramesAttachmentName
 							});
-							attachmentName = thisFramesAttachmentName;
+							lastFramesAttachmentName = thisFramesAttachmentName;
 						}
+					}
+				}
+			} else {
+				if (layer.inPoint > 0.0) {
+					if (!slotAnimData[boneName]) slotAnimData[boneName] = {};
+					attachmentTimeline = slotAnimData[boneName]["attachment"];
+					if (!attachmentTimeline) {
+						slotAnimData[boneName]["attachment"] = attachmentTimeline = [];
+						$.writeLn(layer.inPoint);
+						attachmentName = this.makeSpineAttachmentName( layer, layer.inPoint );
+						if (layer.outPoint >= compDuration) {
+							attachmentTimeline.push({
+								"time": 0.0,
+								"name": null
+							});
+						}
+						attachmentTimeline.push({
+							"time": layer.inPoint,
+							"name": attachmentName
+						});
 					}
 				}
 			}
