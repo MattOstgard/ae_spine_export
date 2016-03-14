@@ -1501,7 +1501,6 @@
 					for (var frame=0; frame<numFrames; frame++) {
 						var time = fromTime + (dt * frame); // MATT NOTE: rounding error
 						var thisFramesAttachmentName = this.makeSpineAttachmentNameStr( layer.files[frame] );
-						var thisFramesAttachmentName = this.makeSpineAttachmentNameStr( layer.files[frame] );
 						if (thisFramesAttachmentName != lastFramesAttachmentName) {
 							attachmentTimeline.push({
 								"time": time,
