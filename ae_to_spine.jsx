@@ -1516,7 +1516,6 @@
 					attachmentTimeline = slotAnimData[boneName]["attachment"];
 					if (!attachmentTimeline) {
 						slotAnimData[boneName]["attachment"] = attachmentTimeline = [];
-						$.writeLn(layer.inPoint);
 						attachmentName = this.makeSpineAttachmentName( layer, layer.inPoint );
 						if (layer.outPoint >= compDuration) {
 							attachmentTimeline.push({
